@@ -30,11 +30,13 @@ function switchMemberSection(sectionName) {
 
   const dashboardMain = document.getElementById('dashboardMainSection');
   const sectionData = document.getElementById('sectionData');
+  const sectionChart = document.getElementById('sectionChart');
   const sectionLokasi = document.getElementById('sectionLokasi');
   const sectionSetting = document.getElementById('sectionSetting');
 
   if (dashboardMain) dashboardMain.style.display = sectionName === 'dashboard' ? '' : 'none';
   if (sectionData) sectionData.style.display = sectionName === 'data' ? '' : 'none';
+  if (sectionChart) sectionChart.style.display = sectionName === 'chart' ? '' : 'none';
   if (sectionLokasi) sectionLokasi.style.display = sectionName === 'lokasi' ? '' : 'none';
   if (sectionSetting) sectionSetting.style.display = sectionName === 'setting' ? '' : 'none';
 
@@ -43,6 +45,12 @@ function switchMemberSection(sectionName) {
   });
 
   if (sectionName === 'data') loadMemberTable();
+  if (sectionName === 'chart') {
+    loadChartDeviceOptions();
+    // Load chart data if device already selected
+    const chartDevice = document.getElementById('chartFilterDevice')?.value;
+    if (chartDevice) loadChartData();
+  }
   if (sectionName === 'lokasi') loadMemberLocations();
 }
 

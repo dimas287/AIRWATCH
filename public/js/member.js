@@ -21,13 +21,14 @@ function renderMemberDataTable(rows = []) {
   if (!tbody) return;
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="10" class="admin-empty">Belum ada data</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="admin-empty">Belum ada data</td></tr>';
     return;
   }
 
   const isAdmin = currentRole === 'admin';
+  const isSelectMode = document.querySelector('.checkbox-column').style.display !== 'none';
 
-  tbody.innerHTML = rows.map((row) => {
+  tbody.innerHTML = rows.map((row, index) => {
     const date = typeof row.timestamp === 'string' && row.timestamp.includes('T')
       ? row.timestamp.split('T')[0]
       : new Date(row.timestamp || Date.now()).toISOString().split('T')[0];
@@ -38,13 +39,23 @@ function renderMemberDataTable(rows = []) {
     const windDirection = row.arah_angin !== undefined ? `${row.arah_angin}°` : '-';
     const windSpeed = row.kecepatan_angin !== undefined ? `${row.kecepatan_angin} m/s` : '-';
 
-    const adminActions = isAdmin
-      ? `<button class="member-table-btn member-table-btn--edit" data-action="edit-row" data-device="${row.device}" data-entry-key="${row.entryKey}">Edit</button>
-         <button class="member-table-btn member-table-btn--delete" data-action="delete-row" data-device="${row.device}" data-entry-key="${row.entryKey}">Hapus</button>`
+    const checkboxCell = isSelectMode 
+      ? `<td class="checkbox-column">
+          <input type="checkbox" class="row-checkbox" data-device="${row.device}" data-entry-key="${row.entryKey}" data-index="${index}">
+        </td>`
       : '';
+
+    const actionCell = isSelectMode
+      ? `<td></td>`
+      : `<td class="member-table-actions">
+          <button class="member-table-btn" data-action="download-row" data-device="${row.device}" data-date="${date}">↓ CSV</button>
+          ${isAdmin ? `<button class="member-table-btn member-table-btn--edit" data-action="edit-row" data-device="${row.device}" data-entry-key="${row.entryKey}">Edit</button>
+         <button class="member-table-btn member-table-btn--delete" data-action="delete-row" data-device="${row.device}" data-entry-key="${row.entryKey}">Hapus</button>` : ''}
+        </td>`;
 
     return `
       <tr>
+        ${checkboxCell}
         <td>${row.timestamp ? new Date(row.timestamp).toLocaleString('id-ID') : '-'}</td>
         <td><span class="member-device-badge">${row.device || '-'}</span></td>
         <td>${row.pm25}</td>
@@ -54,10 +65,7 @@ function renderMemberDataTable(rows = []) {
         <td>${windSpeed}</td>
         <td>${windDirection}</td>
         <td><span class="member-status-badge" style="color:${statusColor};border-color:${statusColor}40;background:${statusColor}10">${row.status || '-'}</span></td>
-        <td class="member-table-actions">
-          <button class="member-table-btn" data-action="download-row" data-device="${row.device}" data-date="${date}">↓ CSV</button>
-          ${adminActions}
-        </td>
+        ${actionCell}
       </tr>
     `;
   }).join('');
@@ -144,12 +152,20 @@ async function loadMemberTable(options = {}) {
 async function updateMemberDataRow(device, entryKey) {
   const pm25 = prompt('PM2.5 baru?');
   const pm10 = prompt('PM10 baru?');
-  if (pm25 === null || pm10 === null) return;
+  const suhu = prompt('Suhu baru (°C)?');
+  const kelembaban = prompt('Kelembaban baru (%)?');
+  const kecepatanAngin = prompt('Kecepatan angin baru (m/s)?');
+  const arahAngin = prompt('Arah angin baru (°)?');
+  
+  if (pm25 === null || pm10 === null || suhu === null || kelembaban === null || kecepatanAngin === null || arahAngin === null) return;
 
   const body = {
     pm25: Number(pm25) || 0,
     pm10: Number(pm10) || 0,
-    suhu: 0, kelembaban: 0, kecepatan_angin: 0, arah_angin: 0,
+    suhu: Number(suhu) || 0,
+    kelembaban: Number(kelembaban) || 0,
+    kecepatan_angin: Number(kecepatanAngin) || 0,
+    arah_angin: Number(arahAngin) || 0,
     status: Number(pm25) >= 75 ? 'WASPADA' : 'AMAN',
     timestamp: new Date().toISOString()
   };
@@ -338,6 +354,10 @@ function initMemberHandlers() {
   const memberFilterStartDate = document.getElementById('memberFilterStartDate');
   const memberFilterEndDate = document.getElementById('memberFilterEndDate');
   const memberFilterLimit = document.getElementById('memberFilterLimit');
+  const btnToggleSelect = document.getElementById('btnToggleSelect');
+  const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+  const btnEditSelected = document.getElementById('btnEditSelected');
+  const btnDeleteSelected = document.getElementById('btnDeleteSelected');
 
   if (btnReloadMemberTable) btnReloadMemberTable.onclick = async () => { await loadMemberTable({ refreshDevices: true }); };
   if (btnApplyMemberFilter) btnApplyMemberFilter.onclick = async () => { await loadMemberTable(); };
@@ -364,10 +384,102 @@ function initMemberHandlers() {
   if (memberFilterLimit) memberFilterLimit.onchange = async () => { await loadMemberTable(); };
   if (btnReloadLocations) btnReloadLocations.onclick = async () => { await loadMemberLocations(); };
 
+  // Select mode toggle
+  if (btnToggleSelect) {
+    btnToggleSelect.onclick = () => {
+      const checkboxColumn = document.querySelector('.checkbox-column');
+      const memberTableActions = document.getElementById('memberTableActions');
+      const isSelectMode = checkboxColumn.style.display !== 'none';
+      
+      if (isSelectMode) {
+        // Exit select mode
+        checkboxColumn.style.display = 'none';
+        memberTableActions.style.display = 'none';
+        btnToggleSelect.textContent = 'Select';
+        selectAllCheckbox.checked = false;
+      } else {
+        // Enter select mode
+        checkboxColumn.style.display = 'table-cell';
+        memberTableActions.style.display = 'flex';
+        btnToggleSelect.textContent = 'Cancel';
+      }
+      
+      // Refresh table to update layout
+      loadMemberTable();
+    };
+  }
+
+  // Select all functionality
+  if (selectAllCheckbox) {
+    selectAllCheckbox.onchange = () => {
+      const rowCheckboxes = document.querySelectorAll('.row-checkbox');
+      rowCheckboxes.forEach(checkbox => {
+        checkbox.checked = selectAllCheckbox.checked;
+      });
+      updateBulkActionButtons();
+    };
+  }
+
+  // Bulk edit functionality
+  if (btnEditSelected) {
+    btnEditSelected.onclick = async () => {
+      const selectedRows = getSelectedRows();
+      if (selectedRows.length === 0) {
+        setMemberDataMessage('Pilih minimal 1 data untuk diedit', true);
+        return;
+      }
+      
+      if (selectedRows.length > 1) {
+        setMemberDataMessage('Edit hanya bisa untuk 1 data saja', true);
+        return;
+      }
+      
+      const { device, entryKey } = selectedRows[0];
+      try {
+        await updateMemberDataRow(device, entryKey);
+        await loadMemberTable();
+        setMemberDataMessage('Data berhasil diedit');
+      } catch (error) {
+        setMemberDataMessage(error.message, true);
+      }
+    };
+  }
+
+  // Bulk delete functionality
+  if (btnDeleteSelected) {
+    btnDeleteSelected.onclick = async () => {
+      const selectedRows = getSelectedRows();
+      if (selectedRows.length === 0) {
+        setMemberDataMessage('Pilih minimal 1 data untuk dihapus', true);
+        return;
+      }
+      
+      if (!confirm(`Hapus ${selectedRows.length} data yang dipilih?`)) return;
+      
+      try {
+        for (const { device, entryKey } of selectedRows) {
+          await deleteMemberDataRow(device, entryKey);
+        }
+        await loadMemberTable();
+        setMemberDataMessage(`${selectedRows.length} data berhasil dihapus`);
+      } catch (error) {
+        setMemberDataMessage(error.message, true);
+      }
+    };
+  }
+
   if (memberDataTableBody) {
     memberDataTableBody.addEventListener('click', async (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+      
+      // Handle row checkbox changes
+      if (target.classList.contains('row-checkbox')) {
+        updateBulkActionButtons();
+        updateSelectAllCheckbox();
+        return;
+      }
+      
       const action = target.dataset.action;
       if (!action) return;
 
@@ -398,6 +510,43 @@ function initMemberHandlers() {
       } catch (error) { setLocationMessage(error.message, true); }
     });
   }
+}
+
+function getSelectedRows() {
+  const selectedCheckboxes = document.querySelectorAll('.row-checkbox:checked');
+  return Array.from(selectedCheckboxes).map(checkbox => ({
+    device: checkbox.dataset.device,
+    entryKey: checkbox.dataset.entryKey
+  }));
+}
+
+function updateBulkActionButtons() {
+  const selectedCount = document.querySelectorAll('.row-checkbox:checked').length;
+  const btnEditSelected = document.getElementById('btnEditSelected');
+  const btnDeleteSelected = document.getElementById('btnDeleteSelected');
+  
+  if (btnEditSelected) {
+    btnEditSelected.disabled = selectedCount !== 1;
+    btnEditSelected.style.opacity = selectedCount === 1 ? '1' : '0.5';
+  }
+  
+  if (btnDeleteSelected) {
+    btnDeleteSelected.disabled = selectedCount === 0;
+    btnDeleteSelected.style.opacity = selectedCount > 0 ? '1' : '0.5';
+  }
+}
+
+function updateSelectAllCheckbox() {
+  const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+  const rowCheckboxes = document.querySelectorAll('.row-checkbox');
+  
+  if (rowCheckboxes.length === 0) {
+    selectAllCheckbox.checked = false;
+    return;
+  }
+  
+  const checkedCount = document.querySelectorAll('.row-checkbox:checked').length;
+  selectAllCheckbox.checked = checkedCount === rowCheckboxes.length;
 }
 
 // ---- AIR QUALITY ALERTS ----
@@ -504,3 +653,308 @@ function processAirQualityAlert(deviceId, aqi, category, timestamp, pm25, pm10) 
 
   alertStateByDevice[deviceId] = { ...state, lastAqi: Math.max(state.lastAqi || 0, aqi), lastSignature: signature };
 }
+
+// ======================================================
+// CHART SECTION - MULTI-METRIC GRAPHS
+// ======================================================
+
+const chartInstances = {};
+
+function setChartMessage(message, isError = false) {
+  const el = document.getElementById('chartMessage');
+  if (!el) return;
+  el.textContent = message;
+  el.style.color = isError ? '#ef4444' : '#64748b';
+}
+
+function destroyChart(canvasId) {
+  if (chartInstances[canvasId]) {
+    chartInstances[canvasId].destroy();
+    delete chartInstances[canvasId];
+  }
+}
+
+function getChartColors() {
+  return {
+    pm25: { border: '#f97316', background: 'rgba(249, 115, 22, 0.1)' },
+    pm10: { border: '#eab308', background: 'rgba(234, 179, 8, 0.1)' },
+    suhu: { border: '#22c55e', background: 'rgba(34, 197, 94, 0.1)' },
+    kelembaban: { border: '#3b82f6', background: 'rgba(59, 130, 246, 0.1)' },
+    kecepatan_angin: { border: '#06b6d4', background: 'rgba(6, 182, 212, 0.1)' },
+    arah_angin: { border: '#a855f7', background: 'rgba(168, 85, 247, 0.1)' }
+  };
+}
+
+function createMetricChart(canvasId, label, data, timestamps, colorConfig) {
+  destroyChart(canvasId);
+  const ctx = document.getElementById(canvasId)?.getContext('2d');
+  if (!ctx) return null;
+
+  // Calculate average line
+  const validData = data.filter(v => v !== null && v !== undefined);
+  const average = validData.length > 0 ? validData.reduce((sum, val) => sum + val, 0) / validData.length : 0;
+  const averageLine = data.map(() => average);
+
+  const chart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: timestamps,
+      datasets: [
+        {
+          label: label,
+          data: data,
+          borderColor: colorConfig.border,
+          backgroundColor: colorConfig.background,
+          borderWidth: 2,
+          fill: true,
+          tension: 0.4,
+          pointRadius: 0,
+          pointHoverRadius: 4
+        },
+        {
+          label: 'Rata-rata',
+          data: averageLine,
+          borderColor: '#ef4444',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          borderDash: [5, 5],
+          fill: false,
+          tension: 0,
+          pointRadius: 0,
+          pointHoverRadius: 0
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      animation: { duration: 400 },
+      plugins: {
+        legend: {
+          display: true,
+          labels: {
+            color: '#64748b',
+            font: { family: 'JetBrains Mono', size: 10 },
+            boxWidth: 12
+          }
+        },
+        tooltip: {
+          backgroundColor: '#0d1520',
+          borderColor: '#1a2d44',
+          borderWidth: 1,
+          titleColor: '#64748b',
+          bodyColor: '#e2e8f0',
+          titleFont: { family: 'JetBrains Mono', size: 10 },
+          bodyFont: { family: 'Barlow Condensed', size: 12 },
+          callbacks: {
+            label: function(context) {
+              if (context.datasetIndex === 1) {
+                return `Rata-rata: ${average.toFixed(2)}`;
+              }
+              return `${context.dataset.label}: ${context.parsed.y?.toFixed(2) || 'N/A'}`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          ticks: {
+            color: '#64748b',
+            font: { family: 'JetBrains Mono', size: 9 },
+            maxTicksLimit: 12,
+            maxRotation: 45,
+            minRotation: 0,
+            autoSkip: true,
+            callback: function(value, index, values) {
+              // For mobile, show fewer labels
+              if (window.innerWidth < 768 && values.length > 8) {
+                return index % Math.ceil(values.length / 6) === 0 ? this.getLabelForValue(value) : '';
+              }
+              return this.getLabelForValue(value);
+            }
+          },
+          grid: { color: 'rgba(26,45,68,0.8)' }
+        },
+        y: {
+          ticks: {
+            color: '#64748b',
+            font: { family: 'JetBrains Mono', size: 9 }
+          },
+          grid: { color: 'rgba(26,45,68,0.8)' }
+        }
+      }
+    }
+  });
+
+  chartInstances[canvasId] = chart;
+  return chart;
+}
+
+function renderMetricCharts(rows) {
+  if (!rows || rows.length === 0) {
+    setChartMessage('Tidak ada data untuk ditampilkan', true);
+    return;
+  }
+
+  const colors = getChartColors();
+  
+  // Sort by timestamp
+  const sortedRows = [...rows].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  
+  // Format timestamps with date and time for better display
+  const timestamps = sortedRows.map(row => {
+    const date = new Date(row.timestamp);
+    const dateStr = date.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit' });
+    const timeStr = date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+    return `${dateStr} ${timeStr}`;
+  });
+
+  // Extract data for each metric
+  const pm25Data = sortedRows.map(row => row.pm25 ?? null);
+  const pm10Data = sortedRows.map(row => row.pm10 ?? null);
+  const suhuData = sortedRows.map(row => row.suhu ?? null);
+  const kelembabanData = sortedRows.map(row => row.kelembaban ?? null);
+  const kecepatanAnginData = sortedRows.map(row => row.kecepatan_angin ?? null);
+  const arahAnginData = sortedRows.map(row => row.arah_angin ?? null);
+
+  // Create charts for metrics with data
+  if (pm25Data.some(v => v !== null)) {
+    createMetricChart('pm25Chart', 'PM2.5 (µg/m³)', pm25Data, timestamps, colors.pm25);
+  }
+  if (pm10Data.some(v => v !== null)) {
+    createMetricChart('pm10Chart', 'PM10 (µg/m³)', pm10Data, timestamps, colors.pm10);
+  }
+  if (suhuData.some(v => v !== null)) {
+    createMetricChart('suhuChart', 'Suhu (°C)', suhuData, timestamps, colors.suhu);
+  }
+  if (kelembabanData.some(v => v !== null)) {
+    createMetricChart('kelembabanChart', 'Kelembaban (%)', kelembabanData, timestamps, colors.kelembaban);
+  }
+  if (kecepatanAnginData.some(v => v !== null)) {
+    createMetricChart('kecepatanAnginChart', 'Kecepatan Angin (m/s)', kecepatanAnginData, timestamps, colors.kecepatan_angin);
+  }
+  if (arahAnginData.some(v => v !== null)) {
+    createMetricChart('arahAnginChart', 'Arah Angin (°)', arahAnginData, timestamps, colors.arah_angin);
+  }
+
+  setChartMessage(`${rows.length} data points loaded`);
+}
+
+async function loadChartDeviceOptions() {
+  const deviceSelect = document.getElementById('chartFilterDevice');
+  if (!deviceSelect) return;
+
+  try {
+    const response = await apiFetch('/api/current');
+    if (!response.ok) return;
+
+    const payload = await response.json();
+    const deviceIds = Object.keys(payload || {}).sort();
+
+    deviceSelect.innerHTML = '<option value="">Pilih Device</option>';
+    deviceIds.forEach((deviceId) => {
+      const option = document.createElement('option');
+      option.value = deviceId;
+      option.textContent = deviceId;
+      deviceSelect.appendChild(option);
+    });
+  } catch (error) {
+    console.error('Load chart devices error:', error);
+  }
+}
+
+async function loadChartData() {
+  const device = document.getElementById('chartFilterDevice')?.value;
+  const startDate = document.getElementById('chartFilterStartDate')?.value;
+  const endDate = document.getElementById('chartFilterEndDate')?.value;
+
+  if (!device) {
+    setChartMessage('Pilih device terlebih dahulu', true);
+    return;
+  }
+
+  setChartMessage('Memuat data grafik...');
+
+  try {
+    const params = new URLSearchParams();
+    params.set('device', device);
+    params.set('limit', '5000');
+    if (startDate) params.set('startDate', startDate);
+    if (endDate) params.set('endDate', endDate);
+
+    const response = await apiFetch(`/api/member/table?${params.toString()}`);
+    if (!response.ok) throw new Error(`Load failed: ${response.status}`);
+
+    const payload = await response.json();
+    renderMetricCharts(payload.rows || []);
+  } catch (error) {
+    console.error('Load chart data error:', error);
+    setChartMessage('Gagal memuat data: ' + error.message, true);
+  }
+}
+
+function initChartHandlers() {
+  const btnApplyChartFilter = document.getElementById('btnApplyChartFilter');
+  const btnResetChartFilter = document.getElementById('btnResetChartFilter');
+  const btnReloadChart = document.getElementById('btnReloadChart');
+  const chartFilterDevice = document.getElementById('chartFilterDevice');
+  const chartFilterStartDate = document.getElementById('chartFilterStartDate');
+  const chartFilterEndDate = document.getElementById('chartFilterEndDate');
+
+  if (btnApplyChartFilter) {
+    btnApplyChartFilter.onclick = loadChartData;
+  }
+
+  if (btnResetChartFilter) {
+    btnResetChartFilter.onclick = () => {
+      if (chartFilterDevice) chartFilterDevice.value = '';
+      if (chartFilterStartDate) chartFilterStartDate.value = '';
+      if (chartFilterEndDate) chartFilterEndDate.value = '';
+      // Clear all charts
+      Object.keys(chartInstances).forEach(id => destroyChart(id));
+      setChartMessage('Filter direset');
+    };
+  }
+
+  if (btnReloadChart) {
+    btnReloadChart.onclick = () => {
+      loadChartDeviceOptions();
+      loadChartData();
+    };
+  }
+
+  if (chartFilterDevice) {
+    chartFilterDevice.onchange = loadChartData;
+  }
+
+  // Chart download buttons
+  document.querySelectorAll('.chart-download-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const canvasId = btn.dataset.chart;
+      const metric = btn.dataset.metric;
+      const canvas = document.getElementById(canvasId);
+      if (!canvas) return;
+
+      const link = document.createElement('a');
+      link.download = `${metric}_chart_${new Date().toISOString().slice(0,10)}.png`;
+      link.href = canvas.toDataURL('image/png');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    });
+  });
+}
+
+// Initialize chart functionality when section is shown
+document.addEventListener('DOMContentLoaded', () => {
+  // Chart section navigation handler
+  const chartNavBtn = document.querySelector('[data-section="chart"]');
+  if (chartNavBtn) {
+    chartNavBtn.addEventListener('click', () => {
+      loadChartDeviceOptions();
+    });
+  }
+  
+  initChartHandlers();
+});

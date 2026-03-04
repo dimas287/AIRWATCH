@@ -184,6 +184,14 @@
           <span class="nav-tooltip">Data</span>
         </button>
 
+        <button type="button" class="member-nav-btn" data-section="chart">
+          <span class="member-nav-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/></svg>
+          </span>
+          <span class="member-nav-label">Chart</span>
+          <span class="nav-tooltip">Chart</span>
+        </button>
+
         <button type="button" class="member-nav-btn" data-section="lokasi">
           <span class="member-nav-icon">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
@@ -646,9 +654,16 @@
         <button type="button" class="location-bar-button" id="btnDownloadFilteredMember">Unduh Filter CSV</button>
       </div>
       <div class="member-table-wrap">
+        <div class="member-table-actions" id="memberTableActions" style="display: none;">
+          <button type="button" class="location-bar-button" id="btnEditSelected">Edit</button>
+          <button type="button" class="location-bar-button" id="btnDeleteSelected">Hapus</button>
+        </div>
         <table class="member-table" id="memberDataTable">
           <thead>
             <tr>
+              <th class="checkbox-column" style="display: none;">
+                <input type="checkbox" id="selectAllCheckbox" />
+              </th>
               <th>Waktu</th>
               <th>Device</th>
               <th>PM2.5</th>
@@ -658,7 +673,9 @@
               <th>Kecepatan Angin</th>
               <th>Arah Angin</th>
               <th>Status</th>
-              <th>Aksi</th>
+              <th>
+                <button type="button" class="location-bar-button" id="btnToggleSelect">Select</button>
+              </th>
             </tr>
           </thead>
           <tbody id="memberDataTableBody">
@@ -667,6 +684,60 @@
         </table>
       </div>
       <p id="memberDataMessage" class="auth-message">—</p>
+    </div>
+  </section>
+
+  <section id="sectionChart" class="member-section" style="display:none;">
+    <div class="row-label">CHART · GRAFIK DATA METRIK</div>
+    <div class="member-card">
+      <div class="member-card-header">
+        <h3>Grafik Multi-Metrik</h3>
+        <div class="member-card-actions">
+          <button type="button" class="location-bar-button" id="btnReloadChart">Refresh Chart</button>
+        </div>
+      </div>
+      <div class="member-filter-bar chart-filter-bar">
+        <select id="chartFilterDevice" class="auth-input member-filter-input">
+          <option value="">Pilih Device</option>
+        </select>
+        <input id="chartFilterStartDate" type="date" class="auth-input member-filter-input" />
+        <input id="chartFilterEndDate" type="date" class="auth-input member-filter-input" />
+        <button type="button" class="location-bar-button" id="btnApplyChartFilter">Tampilkan Grafik</button>
+        <button type="button" class="location-bar-button" id="btnResetChartFilter">Reset</button>
+      </div>
+      <div class="chart-grid-container">
+        <div class="chart-grid-item">
+          <h4 class="chart-metric-title">PM2.5</h4>
+          <canvas id="pm25Chart"></canvas>
+          <button type="button" class="location-bar-button chart-download-btn" data-chart="pm25Chart" data-metric="PM2.5">Download</button>
+        </div>
+        <div class="chart-grid-item">
+          <h4 class="chart-metric-title">PM10</h4>
+          <canvas id="pm10Chart"></canvas>
+          <button type="button" class="location-bar-button chart-download-btn" data-chart="pm10Chart" data-metric="PM10">Download</button>
+        </div>
+        <div class="chart-grid-item">
+          <h4 class="chart-metric-title">Suhu (°C)</h4>
+          <canvas id="suhuChart"></canvas>
+          <button type="button" class="location-bar-button chart-download-btn" data-chart="suhuChart" data-metric="Suhu">Download</button>
+        </div>
+        <div class="chart-grid-item">
+          <h4 class="chart-metric-title">Kelembaban (%)</h4>
+          <canvas id="kelembabanChart"></canvas>
+          <button type="button" class="location-bar-button chart-download-btn" data-chart="kelembabanChart" data-metric="Kelembaban">Download</button>
+        </div>
+        <div class="chart-grid-item">
+          <h4 class="chart-metric-title">Kecepatan Angin (m/s)</h4>
+          <canvas id="kecepatanAnginChart"></canvas>
+          <button type="button" class="location-bar-button chart-download-btn" data-chart="kecepatanAnginChart" data-metric="Kecepatan_Angin">Download</button>
+        </div>
+        <div class="chart-grid-item">
+          <h4 class="chart-metric-title">Arah Angin (°)</h4>
+          <canvas id="arahAnginChart"></canvas>
+          <button type="button" class="location-bar-button chart-download-btn" data-chart="arahAnginChart" data-metric="Arah_Angin">Download</button>
+        </div>
+      </div>
+      <p id="chartMessage" class="auth-message">—</p>
     </div>
   </section>
 
@@ -776,6 +847,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script>
   window.FIREBASE_CONFIG = {
     apiKey: "AIzaSyBpi5mkmB2lIsPgCzHcffL5riCBYX9ct2I",
